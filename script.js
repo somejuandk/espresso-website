@@ -551,7 +551,6 @@
 
             // Reset analyzer layout when going back to dashboard
             DOM.analyzer.sidebar.classList.remove('visible');
-            DOM.analyzer.mainContent.style.transform = 'translateX(0)';
         }
         
         function switchApp(appName) {
@@ -569,7 +568,6 @@
 
             // Reset analyzer layout by default when switching apps
             DOM.analyzer.sidebar.classList.remove('visible');
-            DOM.analyzer.mainContent.style.transform = 'translateX(0)';
 
             // Update header for new app
             updateHeader(appName);
@@ -578,7 +576,6 @@
             if (appName === 'analyzer') {
                 DOM.analyzer.view.classList.remove('is-inactive');
                 DOM.analyzer.sidebar.classList.add('visible');
-                DOM.analyzer.mainContent.style.transform = `translateX(21rem)`;
             } else if (appName === 'backend-correlations') {
                 DOM.backendCorrelations.view.classList.remove('is-inactive');
             } else if (appName === 'percentage') {

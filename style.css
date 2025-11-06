@@ -140,6 +140,16 @@
         #analyzer-sidebar.visible {
             transform: translateX(0);
         }
+        #analyzer-main-content {
+            transition: transform 0.3s ease-in-out;
+            width: 100%;
+        }
+        #analyzer-view:not(.is-inactive) #analyzer-main-content {
+            /* When analyzer is active, constrain width to prevent overflow */
+            max-width: calc(100% - 21rem);
+            margin-left: 21rem;
+            transform: none !important;
+        }
         #file-drop-zone {
             border: 2px dashed #c8d2fe;
             transition: border-color 0.3s, background-color 0.3s;
