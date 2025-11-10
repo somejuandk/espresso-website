@@ -346,6 +346,9 @@
                         <div id="backend-correlations-period-select-container">
                             <!-- Dropdown will be injected here by script.js -->
                         </div>
+                        <div id="backend-correlations-country-select-container">
+                            <!-- Country dropdown will be injected here by script.js -->
+                        </div>
                     </div>
                 </div>
                 <div id="backend-correlations-results" class="hidden mt-8">
@@ -386,6 +389,13 @@
                                         <div class="relative w-full h-3 bg-gray-200 rounded-full correlation-graph-bar mt-2 max-w-xs mx-auto">
                                             <div id="google-correlation-marker" class="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full border-2 border-[#5248e2]" style="left: 50%;"></div>
                                         </div>
+                                    </div>
+                                </div>
+                                <!-- Country Breakdown Section -->
+                                <div id="country-breakdown-container" class="hidden">
+                                    <h4 class="text-md font-semibold text-gray-800 mb-3 mt-2">Country Breakdown</h4>
+                                    <div id="country-correlations-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        <!-- Country-specific correlations will be injected here -->
                                     </div>
                                 </div>
                             </div>

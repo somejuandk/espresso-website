@@ -4,20 +4,23 @@
         function parseShopifyCsv(csvText) {
             const rows = csvText.split('\n').filter(row => row.trim() !== '');
             if (rows.length < 2) throw new Error("Shopify CSV is empty or has no data rows.");
-        
+
             const header = rows[0].split(',').map(h => h.trim().replace(/"/g, ''));
             const dayIndex = header.indexOf('Day');
-            
+
             // Look for "Orders" first, then fall back to "Total orders"
             let ordersIndex = header.indexOf('Orders');
             if (ordersIndex === -1) {
                 ordersIndex = header.indexOf('Total orders');
             }
-        
+
+            // Look for country column
+            const countryIndex = header.findIndex(h => h.toLowerCase() === 'country' || h.toLowerCase() === 'shipping country');
+
             if (dayIndex === -1 || ordersIndex === -1) {
                 throw new Error("Shopify CSV must contain 'Day' and either 'Orders' or 'Total orders' columns.");
             }
-            
+
             const dailyOrders = {};
             rows.slice(1).forEach(row => {
                 const values = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); // handle commas inside quotes if any
@@ -27,16 +30,23 @@
                         const date = new Date(day);
                         if (!isNaN(date)) {
                             const formattedDate = date.toISOString().split('T')[0];
-                            if (!dailyOrders[formattedDate]) {
-                                dailyOrders[formattedDate] = 0;
+                            const country = countryIndex !== -1 ? values[countryIndex].trim().replace(/"/g, '') : 'Unknown';
+                            const key = `${formattedDate}|${country}`;
+
+                            if (!dailyOrders[key]) {
+                                dailyOrders[key] = { day: formattedDate, country: country, orders: 0 };
                             }
-                            dailyOrders[formattedDate] += parseInt(values[ordersIndex].trim().replace(/"/g, ''), 10) || 0;
+                            dailyOrders[key].orders += parseInt(values[ordersIndex].trim().replace(/"/g, ''), 10) || 0;
                         }
                     }
                 }
             });
-        
-            return Object.entries(dailyOrders).map(([day, orders]) => ({ Day: day, Orders: orders }));
+
+            return Object.values(dailyOrders).map(item => ({
+                Day: item.day,
+                Orders: item.orders,
+                Country: item.country
+            }));
         }
 
         function parseAdPlatformCsv(csvText) {
@@ -255,7 +265,7 @@
         function alignBackendData() {
             const adDataMap = new Map();
             const adMetricKeys = new Set();
-        
+
             // Process Meta data
             metaCorrelationsData.forEach(row => {
                 const day = row.Day;
@@ -268,7 +278,7 @@
                     }
                 }
             });
-        
+
             // Process Google data
             googleCorrelationsData.forEach(row => {
                 const day = row.Day;
@@ -281,27 +291,48 @@
                     }
                 }
             });
-        
-            const shopifyDataMap = new Map(shopifyData.map(d => [d.Day, d]));
-            const allDays = new Set([...adDataMap.keys(), ...shopifyDataMap.keys()]);
+
+            // Create a map of shopify data with composite key (Day|Country)
+            const shopifyDataMap = new Map();
+            shopifyData.forEach(d => {
+                const key = `${d.Day}|${d.Country || 'Unknown'}`;
+                shopifyDataMap.set(key, d);
+            });
+
+            // Get all unique days and countries
+            const allDays = new Set([...adDataMap.keys()]);
+            shopifyData.forEach(d => allDays.add(d.Day));
             const sortedDays = Array.from(allDays).sort();
-        
-            unfilteredAlignedBackendData = sortedDays.map(day => {
+
+            const allCountries = new Set();
+            shopifyData.forEach(d => allCountries.add(d.Country || 'Unknown'));
+
+            unfilteredAlignedBackendData = [];
+            sortedDays.forEach(day => {
                 const adMetrics = adDataMap.get(day) || {};
-                const shopifyMetrics = shopifyDataMap.get(day) || {};
-                
-                // Create blended metrics
-                const blendedMetrics = {};
-                adMetricKeys.forEach(metric => {
-                    blendedMetrics[metric] = (adMetrics[`Meta ${metric}`] || 0) + (adMetrics[`Google ${metric}`] || 0);
+
+                // For each country, create a separate row
+                allCountries.forEach(country => {
+                    const shopifyKey = `${day}|${country}`;
+                    const shopifyMetrics = shopifyDataMap.get(shopifyKey);
+
+                    // Only include rows where there's either ad data or shopify data for this day/country combo
+                    if (adMetrics.Day || shopifyMetrics) {
+                        // Create blended metrics
+                        const blendedMetrics = {};
+                        adMetricKeys.forEach(metric => {
+                            blendedMetrics[metric] = (adMetrics[`Meta ${metric}`] || 0) + (adMetrics[`Google ${metric}`] || 0);
+                        });
+
+                        unfilteredAlignedBackendData.push({
+                            Day: day,
+                            Country: country,
+                            Orders: shopifyMetrics ? shopifyMetrics.Orders : 0,
+                            ...adMetrics, // Contains prefixed metrics
+                            ...blendedMetrics // Contains non-prefixed, summed metrics
+                        });
+                    }
                 });
-        
-                return {
-                    Day: day,
-                    Orders: shopifyMetrics.Orders || 0,
-                    ...adMetrics, // Contains prefixed metrics
-                    ...blendedMetrics // Contains non-prefixed, summed metrics
-                };
             });
         }
 
@@ -350,40 +381,85 @@
             container.querySelector('#backend-period-select').addEventListener('change', processAndRenderBackendCorrelations);
         }
 
+        function populateCountrySelector() {
+            const container = document.getElementById('backend-correlations-country-select-container');
+            if (!container) return;
+
+            if (unfilteredAlignedBackendData.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            // Get all unique countries from the data
+            const allCountries = new Set();
+            unfilteredAlignedBackendData.forEach(d => {
+                if (d.Country) allCountries.add(d.Country);
+            });
+
+            if (allCountries.size === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const sortedCountries = Array.from(allCountries).sort();
+
+            let selectHTML = `<label for="backend-country-select" class="block text-sm font-medium text-gray-600">Filter by Country:</label>
+                              <select id="backend-country-select" class="styled-select mt-1 block w-full rounded-full p-2 max-w-xs">
+                              <option value="all">All Countries</option>`;
+
+            sortedCountries.forEach(country => {
+                const selected = selectedCountryFilter === country ? 'selected' : '';
+                selectHTML += `<option value="${country}" ${selected}>${country}</option>`;
+            });
+
+            selectHTML += `</select>`;
+            container.innerHTML = selectHTML;
+
+            container.querySelector('#backend-country-select').addEventListener('change', (e) => {
+                selectedCountryFilter = e.target.value;
+                processAndRenderBackendCorrelations();
+            });
+        }
+
         function applyBackendFilter() {
-            if (backendCorrelationPeriodType === 'all') {
-                alignedBackendData = [...unfilteredAlignedBackendData];
-                return;
+            // Start with unfiltered data
+            let filteredData = [...unfilteredAlignedBackendData];
+
+            // Apply period filter
+            if (backendCorrelationPeriodType !== 'all') {
+                const periodSelect = document.getElementById('backend-period-select');
+                if (periodSelect) {
+                    const selectedValue = periodSelect.value;
+
+                    if (backendCorrelationPeriodType === 'monthly') {
+                        filteredData = filteredData.filter(d => d.Day.startsWith(selectedValue));
+                    } else if (backendCorrelationPeriodType === 'yearly') {
+                        filteredData = filteredData.filter(d => d.Day.startsWith(selectedValue));
+                    } else if (backendCorrelationPeriodType === 'quarterly') {
+                        const [year, quarter] = selectedValue.split('-Q');
+                        const yearNum = parseInt(year);
+                        const quarterNum = parseInt(quarter);
+                        const startMonth = (quarterNum - 1) * 3; // 0-indexed
+                        const endMonth = startMonth + 2;
+                        filteredData = filteredData.filter(d => {
+                            const date = new Date(d.Day + 'T00:00:00');
+                            return date.getUTCFullYear() === yearNum && date.getUTCMonth() >= startMonth && date.getUTCMonth() <= endMonth;
+                        });
+                    }
+                }
             }
 
-            const periodSelect = document.getElementById('backend-period-select');
-            if (!periodSelect) {
-                alignedBackendData = [...unfilteredAlignedBackendData];
-                return;
+            // Apply country filter
+            if (selectedCountryFilter && selectedCountryFilter !== 'all') {
+                filteredData = filteredData.filter(d => d.Country === selectedCountryFilter);
             }
-            const selectedValue = periodSelect.value;
 
-            if (backendCorrelationPeriodType === 'monthly') {
-                alignedBackendData = unfilteredAlignedBackendData.filter(d => d.Day.startsWith(selectedValue));
-            } else if (backendCorrelationPeriodType === 'yearly') {
-                alignedBackendData = unfilteredAlignedBackendData.filter(d => d.Day.startsWith(selectedValue));
-            } else if (backendCorrelationPeriodType === 'quarterly') {
-                const [year, quarter] = selectedValue.split('-Q');
-                const yearNum = parseInt(year);
-                const quarterNum = parseInt(quarter);
-                const startMonth = (quarterNum - 1) * 3; // 0-indexed
-                const endMonth = startMonth + 2;
-                alignedBackendData = unfilteredAlignedBackendData.filter(d => {
-                    const date = new Date(d.Day + 'T00:00:00');
-                    return date.getUTCFullYear() === yearNum && date.getUTCMonth() >= startMonth && date.getUTCMonth() <= endMonth;
-                });
-            } else {
-                alignedBackendData = [...unfilteredAlignedBackendData];
-            }
+            alignedBackendData = filteredData;
         }
 
         function processAndRenderBackendCorrelations() {
             populateBackendPeriodSelectors();
+            populateCountrySelector();
             applyBackendFilter();
 
             if (alignedBackendData.length === 0) {
@@ -395,8 +471,8 @@
                 DOM.backendCorrelations.tableContainer.innerHTML = `<p class="text-center text-gray-500 py-8">No data available for the selected period.</p>`;
                 return;
             }
-            
-            const adMetrics = Object.keys(alignedBackendData[0]).filter(k => k !== 'Day' && k !== 'Orders' && !k.startsWith('Meta ') && !k.startsWith('Google ') && typeof alignedBackendData[0][k] === 'number');
+
+            const adMetrics = Object.keys(alignedBackendData[0]).filter(k => k !== 'Day' && k !== 'Orders' && k !== 'Country' && !k.startsWith('Meta ') && !k.startsWith('Google ') && typeof alignedBackendData[0][k] === 'number');
             
             const select = DOM.backendCorrelations.metricSelect;
             const currentVal = select.value;
@@ -422,7 +498,7 @@
 
         function renderBackendCorrelationTable() {
             const ordersData = alignedBackendData.map(d => d.Orders);
-            const adMetrics = Object.keys(alignedBackendData[0]).filter(k => k !== 'Day' && k !== 'Orders' && typeof alignedBackendData[0][k] === 'number');
+            const adMetrics = Object.keys(alignedBackendData[0]).filter(k => k !== 'Day' && k !== 'Orders' && k !== 'Country' && typeof alignedBackendData[0][k] === 'number');
 
             const correlations = adMetrics.map(metric => {
                 const metricData = alignedBackendData.map(d => d[metric] || 0);
@@ -496,7 +572,64 @@
             } else {
                 DOM.backendCorrelations.googleCorrelationContainer.classList.add('hidden');
             }
-        
+
+            // 4. Country Breakdown (only show when no specific country is selected)
+            const countryBreakdownContainer = document.getElementById('country-breakdown-container');
+            const countryCorrelationsGrid = document.getElementById('country-correlations-grid');
+
+            if (selectedCountryFilter === 'all' && countryBreakdownContainer && countryCorrelationsGrid) {
+                // Get all unique countries from the filtered data
+                const allCountries = new Set();
+                alignedBackendData.forEach(d => {
+                    if (d.Country) allCountries.add(d.Country);
+                });
+
+                if (allCountries.size > 1) {
+                    // Calculate correlation for each country
+                    const countryCorrelations = [];
+                    allCountries.forEach(country => {
+                        const countryData = alignedBackendData.filter(d => d.Country === country);
+                        if (countryData.length > 1) {
+                            const countryOrdersData = countryData.map(d => d.Orders);
+                            const countryMetricData = countryData.map(d => d[selectedMetric] || 0);
+                            const correlation = correl(countryOrdersData, countryMetricData);
+                            if (!isNaN(correlation)) {
+                                countryCorrelations.push({ country, correlation, dataPoints: countryData.length });
+                            }
+                        }
+                    });
+
+                    // Sort by absolute correlation value
+                    countryCorrelations.sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation));
+
+                    // Render country breakdowns
+                    if (countryCorrelations.length > 0) {
+                        let countryHTML = '';
+                        countryCorrelations.forEach(({ country, correlation, dataPoints }) => {
+                            const markerPosition = (correlation + 1) / 2 * 100;
+                            countryHTML += `
+                                <div class="text-center p-3 bg-white border border-gray-200 rounded-lg">
+                                    <p class="text-xs text-gray-600 font-medium mb-1">${country}</p>
+                                    <p class="text-lg font-bold text-gray-900">${correlation.toFixed(4)}</p>
+                                    <div class="relative w-full h-2 bg-gray-200 rounded-full mt-2">
+                                        <div class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-[#5248e2] rounded-full" style="left: calc(${markerPosition}% - 6px);"></div>
+                                    </div>
+                                    <p class="text-xs text-gray-400 mt-1">${dataPoints} data points</p>
+                                </div>
+                            `;
+                        });
+                        countryCorrelationsGrid.innerHTML = countryHTML;
+                        countryBreakdownContainer.classList.remove('hidden');
+                    } else {
+                        countryBreakdownContainer.classList.add('hidden');
+                    }
+                } else {
+                    countryBreakdownContainer.classList.add('hidden');
+                }
+            } else {
+                if (countryBreakdownContainer) countryBreakdownContainer.classList.add('hidden');
+            }
+
             // --- Chart Rendering (uses overall data, which is correct for the main charts) ---
             const labels = alignedBackendData.map(d => formatDate(d.Day));
             const themeColors = getThemeColors();

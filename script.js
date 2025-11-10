@@ -26,6 +26,7 @@
         let backendCorrelationMetricChart = null;
         let unfilteredAlignedBackendData = [], alignedBackendData = [];
         let backendCorrelationPeriodType = 'all';
+        let selectedCountryFilter = 'all';
         let currentMetricDetail = null;
 
         let notificationTimeout;
