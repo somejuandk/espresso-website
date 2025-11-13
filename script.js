@@ -668,12 +668,18 @@
         let currentUser = null;
 
         async function initializeClerk() {
-            return new Promise((resolve) => {
-                // Wait for Clerk to be available
+            return new Promise((resolve, reject) => {
+                let attempts = 0;
+                const maxAttempts = 50; // 5 seconds max wait
+
                 const checkClerk = setInterval(() => {
+                    attempts++;
                     if (window.Clerk) {
                         clearInterval(checkClerk);
                         resolve();
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(checkClerk);
+                        reject(new Error('Clerk SDK failed to load'));
                     }
                 }, 100);
             });
@@ -681,23 +687,30 @@
 
         async function handleAuthentication() {
             try {
+                console.log('Initializing Clerk authentication...');
+
                 // Wait for Clerk to load
                 await initializeClerk();
+                console.log('Clerk SDK loaded');
 
                 // Load Clerk
                 await window.Clerk.load();
                 clerkInstance = window.Clerk;
+                console.log('Clerk instance created');
 
                 // Check if user is signed in
                 if (clerkInstance.user) {
+                    console.log('User is signed in:', clerkInstance.user);
                     currentUser = clerkInstance.user;
                     showAuthenticatedApp();
                 } else {
+                    console.log('User is not signed in, showing sign-in screen');
                     showSignInScreen();
                 }
 
                 // Listen for authentication changes
                 clerkInstance.addListener((state) => {
+                    console.log('Clerk state changed:', state);
                     if (state.user) {
                         currentUser = state.user;
                         showAuthenticatedApp();
@@ -707,21 +720,27 @@
                 });
             } catch (error) {
                 console.error('Error initializing Clerk:', error);
+                alert('Authentication system failed to load. Please refresh the page. Error: ' + error.message);
                 // Show app anyway if Clerk fails (fallback for development)
-                document.getElementById('app-wrapper').classList.remove('hidden');
+                const appWrapper = document.getElementById('app-wrapper');
+                if (appWrapper) {
+                    appWrapper.classList.remove('hidden');
+                }
             }
         }
 
         function showSignInScreen() {
+            console.log('Showing sign-in screen');
             const authContainer = document.getElementById('auth-container');
             const appWrapper = document.getElementById('app-wrapper');
             const signInContainer = document.getElementById('clerk-signin-container');
 
-            appWrapper.classList.add('hidden');
-            authContainer.classList.remove('hidden');
+            if (appWrapper) appWrapper.classList.add('hidden');
+            if (authContainer) authContainer.classList.remove('hidden');
 
             // Mount Clerk Sign In component
             if (clerkInstance && signInContainer) {
+                console.log('Mounting Clerk sign-in component');
                 clerkInstance.mountSignIn(signInContainer, {
                     appearance: {
                         elements: {
@@ -730,15 +749,18 @@
                         }
                     }
                 });
+            } else {
+                console.error('Failed to mount sign-in:', { clerkInstance, signInContainer });
             }
         }
 
         function showAuthenticatedApp() {
+            console.log('Showing authenticated app');
             const authContainer = document.getElementById('auth-container');
             const appWrapper = document.getElementById('app-wrapper');
 
-            authContainer.classList.add('hidden');
-            appWrapper.classList.remove('hidden');
+            if (authContainer) authContainer.classList.add('hidden');
+            if (appWrapper) appWrapper.classList.remove('hidden');
 
             // Update user greeting if available
             updateUserGreeting();
@@ -774,8 +796,13 @@
             }
         }
 
-        // Initialize authentication on page load
-        handleAuthentication();
+        // Initialize authentication when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', handleAuthentication);
+        } else {
+            // DOM is already loaded
+            handleAuthentication();
+        }
 
         window.addEventListener('DOMContentLoaded', () => {
 
