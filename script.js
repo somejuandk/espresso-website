@@ -693,8 +693,18 @@
                 await initializeClerk();
                 console.log('Clerk SDK loaded');
 
-                // Load Clerk
-                await window.Clerk.load();
+                // Load Clerk with routing configuration
+                await window.Clerk.load({
+                    signInUrl: window.location.href,
+                    signUpUrl: window.location.href,
+                    afterSignInUrl: window.location.href,
+                    afterSignUpUrl: window.location.href,
+                    navigate: (to) => {
+                        // Prevent navigation - stay on current page
+                        console.log('Preventing navigation to:', to);
+                        return Promise.resolve();
+                    }
+                });
                 clerkInstance = window.Clerk;
                 console.log('Clerk instance created');
 
@@ -752,9 +762,10 @@
                             card: 'shadow-xl'
                         }
                     },
-                    redirectUrl: window.location.origin,
-                    afterSignInUrl: window.location.origin,
-                    afterSignUpUrl: window.location.origin
+                    routing: 'virtual',
+                    redirectUrl: window.location.href,
+                    afterSignInUrl: window.location.href,
+                    afterSignUpUrl: window.location.href
                 });
             } else {
                 console.error('Failed to mount sign-in:', { clerkInstance, signInContainer });
