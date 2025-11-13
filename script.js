@@ -741,13 +741,20 @@
             // Mount Clerk Sign In component
             if (clerkInstance && signInContainer) {
                 console.log('Mounting Clerk sign-in component');
+
+                // Unmount first if already mounted
+                clerkInstance.unmountSignIn(signInContainer);
+
                 clerkInstance.mountSignIn(signInContainer, {
                     appearance: {
                         elements: {
                             rootBox: 'mx-auto',
                             card: 'shadow-xl'
                         }
-                    }
+                    },
+                    redirectUrl: window.location.origin,
+                    afterSignInUrl: window.location.origin,
+                    afterSignUpUrl: window.location.origin
                 });
             } else {
                 console.error('Failed to mount sign-in:', { clerkInstance, signInContainer });
@@ -758,6 +765,12 @@
             console.log('Showing authenticated app');
             const authContainer = document.getElementById('auth-container');
             const appWrapper = document.getElementById('app-wrapper');
+            const signInContainer = document.getElementById('clerk-signin-container');
+
+            // Unmount sign-in component if it's still mounted
+            if (clerkInstance && signInContainer) {
+                clerkInstance.unmountSignIn(signInContainer);
+            }
 
             if (authContainer) authContainer.classList.add('hidden');
             if (appWrapper) appWrapper.classList.remove('hidden');
