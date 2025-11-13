@@ -10,6 +10,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Varela+Round&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+
+    <!-- Clerk Authentication SDK -->
+    <!-- IMPORTANT: Replace YOUR_CLERK_PUBLISHABLE_KEY with your actual Clerk Publishable Key -->
+    <!-- Get your key from: https://dashboard.clerk.com/~/api-keys -->
+    <script
+        async
+        crossorigin="anonymous"
+        data-clerk-publishable-key="YOUR_CLERK_PUBLISHABLE_KEY"
+        src="https://accounts.clerk.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+        type="text/javascript"
+        id="clerk-js"
+    ></script>
+
     <script src="script.js" defer></script>
     <script src="Analyzer Module/analyzer.js" defer></script>
     <script src="Analyzer Module/analyzer-correlations.js" defer></script>
@@ -28,6 +41,16 @@
 <link rel="stylesheet" href="/index.css">
 </head>
 <body class="text-gray-800">
+    <!-- Authentication Container -->
+    <div id="auth-container" class="fixed inset-0 z-50 hidden bg-gradient-to-br from-indigo-50 to-blue-100 flex items-center justify-center">
+        <div class="text-center">
+            <div id="clerk-signin-container" class="inline-block"></div>
+            <p class="mt-6 text-gray-600 text-sm">Please sign in to access the application</p>
+        </div>
+    </div>
+
+    <!-- Main Application (hidden until authenticated) -->
+    <div id="app-wrapper" class="hidden">
     <div id="app-switcher-modal" class="fixed inset-0 z-50 hidden items-start justify-center">
         <div id="app-switcher-backdrop" class="fixed inset-0 bg-gray-900 bg-opacity-30 modal-backdrop"></div>
         <div class="relative w-full h-full flex flex-col items-center justify-center">
@@ -116,6 +139,12 @@
                         </svg>
                         File Library
                     </div>
+                </button>
+                <button id="sign-out-btn" class="flex items-center text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors" title="Sign Out">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Sign Out
                 </button>
             </div>
         </div>
@@ -1374,6 +1403,7 @@
             </div>
         </div>
     </div>
+    </div> <!-- Close app-wrapper -->
 <script type="module" src="/index.tsx"></script>
 </body>
 </html>

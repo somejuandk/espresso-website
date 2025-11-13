@@ -663,6 +663,120 @@
             return (mulSum - (sum1 * sum2 / n)) / dense;
         }
 
+        // --- Clerk Authentication Integration ---
+        let clerkInstance = null;
+        let currentUser = null;
+
+        async function initializeClerk() {
+            return new Promise((resolve) => {
+                // Wait for Clerk to be available
+                const checkClerk = setInterval(() => {
+                    if (window.Clerk) {
+                        clearInterval(checkClerk);
+                        resolve();
+                    }
+                }, 100);
+            });
+        }
+
+        async function handleAuthentication() {
+            try {
+                // Wait for Clerk to load
+                await initializeClerk();
+
+                // Load Clerk
+                await window.Clerk.load();
+                clerkInstance = window.Clerk;
+
+                // Check if user is signed in
+                if (clerkInstance.user) {
+                    currentUser = clerkInstance.user;
+                    showAuthenticatedApp();
+                } else {
+                    showSignInScreen();
+                }
+
+                // Listen for authentication changes
+                clerkInstance.addListener((state) => {
+                    if (state.user) {
+                        currentUser = state.user;
+                        showAuthenticatedApp();
+                    } else {
+                        showSignInScreen();
+                    }
+                });
+            } catch (error) {
+                console.error('Error initializing Clerk:', error);
+                // Show app anyway if Clerk fails (fallback for development)
+                document.getElementById('app-wrapper').classList.remove('hidden');
+            }
+        }
+
+        function showSignInScreen() {
+            const authContainer = document.getElementById('auth-container');
+            const appWrapper = document.getElementById('app-wrapper');
+            const signInContainer = document.getElementById('clerk-signin-container');
+
+            appWrapper.classList.add('hidden');
+            authContainer.classList.remove('hidden');
+
+            // Mount Clerk Sign In component
+            if (clerkInstance && signInContainer) {
+                clerkInstance.mountSignIn(signInContainer, {
+                    appearance: {
+                        elements: {
+                            rootBox: 'mx-auto',
+                            card: 'shadow-xl'
+                        }
+                    }
+                });
+            }
+        }
+
+        function showAuthenticatedApp() {
+            const authContainer = document.getElementById('auth-container');
+            const appWrapper = document.getElementById('app-wrapper');
+
+            authContainer.classList.add('hidden');
+            appWrapper.classList.remove('hidden');
+
+            // Update user greeting if available
+            updateUserGreeting();
+        }
+
+        function updateUserGreeting() {
+            if (!currentUser) return;
+
+            const greetingText = document.getElementById('app-switcher-greeting-text');
+            const userPositionText = document.getElementById('app-switcher-user-position-text');
+
+            if (greetingText) {
+                const firstName = currentUser.firstName || 'User';
+                const lastName = currentUser.lastName || '';
+                greetingText.textContent = `Welcome, ${firstName} ${lastName}!`;
+            }
+
+            if (userPositionText) {
+                const email = currentUser.primaryEmailAddress?.emailAddress || '';
+                userPositionText.textContent = email;
+            }
+
+            // Show the greeting container
+            const greetingContainer = document.getElementById('app-switcher-greeting');
+            if (greetingContainer) {
+                greetingContainer.classList.remove('hidden');
+            }
+        }
+
+        function handleSignOut() {
+            if (clerkInstance) {
+                clerkInstance.signOut();
+            }
+        }
+
+        // Initialize authentication on page load
+        handleAuthentication();
+
         window.addEventListener('DOMContentLoaded', () => {
 
             showDashboardView();
@@ -940,6 +1054,14 @@
                     document.body.classList.toggle('screenshot-mode', isScreenshotMode);
                     localStorage.setItem('screenshotMode', isScreenshotMode);
                     showNotification(`Screenshot mode ${isScreenshotMode ? 'enabled' : 'disabled'}.`, 'info');
+                });
+            }
+
+            // Sign Out Button
+            const signOutBtn = document.getElementById('sign-out-btn');
+            if (signOutBtn) {
+                signOutBtn.addEventListener('click', () => {
+                    handleSignOut();
                 });
             }
 
